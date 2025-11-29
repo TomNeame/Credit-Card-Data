@@ -37,3 +37,5 @@ dat$CLIENTNUM <- NULL
 summary(dat) # useful for the numerical columns
 
 colSums(is.na(dat)) # no NA values to clean
+
+push test
