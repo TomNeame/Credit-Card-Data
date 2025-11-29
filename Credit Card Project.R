@@ -9,6 +9,7 @@ dat <- dat[, -22:-23] # removing junk columns as instructed on source website
 
 str(dat) # matches what is expected, may be worth turning 'Attrition_Flag'
          # binary, as this is the outcome variable we are going to predict
+dat$CLIENTNUM <- NULL
 
 ## Variables Explained:
  # CLIENTNUM                : Unique Identifier for customer holding account
