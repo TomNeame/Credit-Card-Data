@@ -38,4 +38,19 @@ summary(dat) # useful for the numerical columns
 
 colSums(is.na(dat)) # no NA values to clean
 
+# classifying the character variables as factors
+dat$Attrition_Flag <- ifelse(dat$Attrition_Flag == "Attrited Customer", "Yes", "No")
+dat$Attrition_Flag <- as.factor(dat$Attrition_Flag)
+# applying to the rest of the character columns
+dat[sapply(dat, is.character)] <- lapply(dat[sapply(dat, is.character)], as.factor)
+
 #### EDA ####
+
+## Outcome overview ##
+tabyl(dat, Attrition_Flag)
+
+ggplot(dat, aes(x = factor(medal))) +     # visual plot of the number and split of medals
+  geom_bar(fill = "steelblue") +
+  theme_minimal() +
+  labs(x = "medal (0=no, 1=yes)", y = "count",
+       title = "Class balance: medal outcome")
