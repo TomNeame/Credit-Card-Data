@@ -3,6 +3,13 @@
 dat <- read.csv("BankChurners.csv")
 dat <- dat[, -22:-23] # removing junk columns as instructed on source website
 
+#
+library(highcharter)
+library(dplyr)
+library(viridis)
+library(readr)
+library(purrr)
+
 #### Quality Checking ####
 
 # visualising variables
@@ -38,5 +45,64 @@ summary(dat) # useful for the numerical columns
 
 colSums(is.na(dat)) # no NA values to clean
 
+# classifying the character variables as factors
+dat$Attrition_Flag <- ifelse(dat$Attrition_Flag == "Attrited Customer", "Yes", "No")
+dat$Attrition_Flag <- as.factor(dat$Attrition_Flag)
+# applying to the rest of the character columns
+dat[sapply(dat, is.character)] <- lapply(dat[sapply(dat, is.character)], as.factor)
 
+str(dat)
+
+cor_spearman <- cor(dat[, sapply(dat, is.numeric)], method = 'spearman')
+
+# Visualising Spearman's Correlation Coefficients with a heatmap
+as.matrix(data.frame(cor_spearman)) %>% 
+  round(3) %>% # All values to 3 d.p.
+  hchart() %>% 
+  hc_add_theme(hc_theme_smpl()) %>%
+  hc_title(text = "Spearman's correlation coefficients", align = "center") %>% 
+  hc_legend(align = "center") %>% 
+  hc_colorAxis(stops = color_stops(colors = viridis::inferno(10))) %>%
+  hc_plotOptions(
+    series = list(
+      boderWidth = 0,
+      dataLabels = list(enabled = TRUE)))
+
+
+cols_to_plot <- c("Gender", "Education_Level", "Marital_Status", 
+                  "Income_Category", "Card_Category")
+
+# 3. Create a list of charts using a loop (map)
+chart_list <- map(cols_to_plot, function(col_name) {
+  
+  # Prepare data for this specific column
+  plot_data <- dat %>%
+    group_by(.data[[col_name]], Attrition_Flag) %>%
+    count() %>%
+    ungroup()
+  
+  # Create the chart
+  hchart(plot_data, 
+         type = "column",
+         hcaes(x = !!sym(col_name), y = n, group = Attrition_Flag)) %>%
+    
+    # Dynamic Titles
+    hc_title(text = gsub("_", " ", col_name), align = "center",
+             style = list(fontSize = "14px")) %>% 
+    
+    # Custom Colors: Attrited (Orange), Existing (Blue)
+    hc_colors(c("#FF8C00", "#1f77b4")) %>% 
+    
+    # Simplified Axis formatting for small grid
+    hc_yAxis(title = list(text = "")) %>%
+    hc_xAxis(title = list(text = "")) %>%
+    
+    # Shared Theme
+    hc_add_theme(hc_theme_smpl()) %>%
+    hc_legend(enabled = FALSE) # Hide legend to save space (it's redundant)
+})
+
+# 4. Display them all together in a grid
+# ncol = 2 means two charts per row
+hw_grid(chart_list, ncol = 2, rowheight = 400)
 
