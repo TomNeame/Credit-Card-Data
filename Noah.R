@@ -1,4 +1,10 @@
-
+#### Load Required Packages ####
+library(janitor)     # Tabulation (tabyl)
+library(ggplot2)     # Data visualisation
+library(patchwork)
+library(gridExtra)    # Arranging multiple plots
+library(corrplot)     # Correlation analysis (Chap 2, Slide 37)
+library(dplyr)
 
 dat <- read.csv("BankChurners.csv")
 dat <- dat[, -22:-23] # removing junk columns as instructed on source website
@@ -32,7 +38,7 @@ dat$CLIENTNUM <- NULL
 # Total_Trans_Amt          : Total transaction amount (last 12 months)
 # Total_Trans_Ct           : Total transaction count (last 12 months)
 # Total_Ct_Chng_Q4_Q1      : Change in transaction count (Q4 over Q1)
-# Avg_Utilization_Ratio    : Average card utilisation ratio
+# Avg_Utilization_Ratio    : Average card utilisation ratio (Proportion of credit limit used each month)
 
 summary(dat) # useful for the numerical columns
 
@@ -46,11 +52,48 @@ dat[sapply(dat, is.character)] <- lapply(dat[sapply(dat, is.character)], as.fact
 
 #### EDA ####
 
-## Outcome overview ##
+## Outcome variable overview ##
 tabyl(dat, Attrition_Flag)
 
-ggplot(dat, aes(x = factor(medal))) +     # visual plot of the number and split of medals
+ggplot(dat, aes(x = Attrition_Flag)) +     # visual plot of the number and split of medals
   geom_bar(fill = "steelblue") +
   theme_minimal() +
-  labs(x = "medal (0=no, 1=yes)", y = "count",
-       title = "Class balance: medal outcome")
+  labs(x = "Attrited (0=no, 1=yes)", y = "count",
+       title = "Class balance: Attrition")
+
+## Quick visual outlier scan by plotting boxplots ##
+p_b1 <- ggplot(dat, aes(y = Customer_Age)) +
+  geom_boxplot(fill = "lightblue") +
+  theme_minimal() +
+  labs(title = "Age")
+p_b2 <- ggplot(dat, aes(y = Total_Trans_Ct)) +
+  geom_boxplot(fill = "lightblue") +
+  theme_minimal() +
+  labs(title = "Total Transaction count")
+p_b3 <- ggplot(dat, aes(y = Months_on_book)) +
+  geom_boxplot(fill = "lightblue") +
+  theme_minimal() +
+  labs(title = "Months on book")
+p_b4 <- ggplot(dat, aes(y = Avg_Utilization_Ratio)) +
+  geom_boxplot(fill = "lightblue") +
+  theme_minimal() +
+  labs(title = "Average Utilisation Ratio")
+
+(p_b1 + p_b2) / (p_b3 + p_b4)
+
+## Numeric vs outcome ##
+# boxplot x violin chart             # we plot a boxplot on top of a violin chart to give easily understandable visuals
+p_box_age <- ggplot(dat, aes(x = Attrition_Flag, y = Customer_Age, fill = Attrition_Flag)) +
+  geom_violin(width = 0.5, trim = FALSE, alpha = 0.7) +
+  theme_minimal() +
+  labs(title = NULL, x = "Attrited", y = "Age")
+
+p_box_train <- ggplot(dat, aes(x = Attrition_Flag, y = Months_on_book, fill = Attrition_Flag)) +
+  geom_violin(width = 0.5, trim = FALSE, alpha = 0.7) +
+  theme_minimal() +
+  labs(title = NULL, x = "Attrited", y = "Months on Book")
+
+# Compare effects
+(p_box_age / p_box_train) +
+  plot_annotation(title = "Distributions of Training Hours and Age by Medal")
+p_box_age
