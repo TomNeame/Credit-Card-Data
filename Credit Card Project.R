@@ -40,3 +40,12 @@ colSums(is.na(dat)) # no NA values to clean
 
 
 
+GLM T
+LDA N
+KLM T
+CART N
+RF T
+Boosting - GBM N
+Support vector T
+Deep learning N
+
