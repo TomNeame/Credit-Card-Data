@@ -34,7 +34,7 @@ dat$CLIENTNUM <- NULL # just personal identifier, not useful in analysis
 # Contacts_Count_12_mon    : No. of contacts in the last 12 months
 # Credit_Limit             : Credit limit on the credit card
 # Total_Revolving_Bal      : Total revolving balance on the credit card
-# Avg_Open_To_Buy          : Open to buy credit line (avg of last 12 months)
+# Avg_Open_To_Buy          : Avg amount of credit available (Credit Limit - Current Balance) over last 12 mos
 # Total_Amt_Chng_Q4_Q1     : Change in transaction amount (Q4 over Q1)
 # Total_Trans_Amt          : Total transaction amount (last 12 months)
 # Total_Trans_Ct           : Total transaction count (last 12 months)
@@ -149,3 +149,22 @@ corrplot(cor_matrix, method = "color", type = "upper",
          tl.col = "black", tl.cex = 0.6,
          addCoef.col = "black", number.cex = 0.5,
          title = "Feature Correlation Matrix", mar=c(0,0,2,0))
+# some of the variables are very, sometimes perfectly, correlated with eachother.
+# this is because some variables are very closely linked to another, for example:
+# 'Avg_Open_To_Buy' is equal to the Credit_Limit - current balance of the account holder.
+# so for the individuals who don't use their card much, their credit limit will 
+# essentially be equal to their Avg_Open_To_Buy. This causes multicollinearity, which 
+# breaks some models, so we will remove 'Avg_Open_To_Buy'
+#
+# another potential problem is transaction behaviour:
+# there is a very strong correlation (0.81) between `Total_Transaction_Amt` and `Total_Trans_Ct`,
+# this makes sense, as people who use their card more often (Ct) usually spend more
+# money in total (Amt). We will keep both variables in, however in models like logistic 
+# regression, having two highly correlated variables makes the model unstable so
+# we will have to take this into account
+#
+# another potential problem is that `Customer_Age` and `Months_on_book` are also 
+# highly correlated (0.79). This makes sense, as older customers generally have held
+# their account for longer. Similarly these two variables provide overlapping information.
+# We will have to check the importance of customer age, as the months on book variable
+# may be much more telling on how likely the customer is to leave
