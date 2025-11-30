@@ -1,6 +1,8 @@
 #### Install and Load Required Packages ####
 install.packages("tree")
 install.packages("gbm")
+install.packages("keras")
+install.packages("ROCR")
 library(janitor)     # Tabulation (tabyl)
 library(ggplot2)     # Data visualisation
 library(patchwork)   # Multiple plots
@@ -13,6 +15,12 @@ library(caret)       # For data splitting
 library(pROC)        # For ROC curves
 library(tree)        # For CART
 library(gbm)         # For Boosting
+library(keras)       # For Deep-Learning
+library(ROCR)        # For Threshold visualisation
+
+## Deep-Learning download requirement ***(only run code if TensorFlow is not installed)*** ##
+# reticulate::install_python(version = '3.11') # remove '#' to install requirements
+# install_keras()
 
 dat <- read.csv("BankChurners.csv")
 dat <- dat[, -22:-23] # removing junk columns as instructed on source website
@@ -400,3 +408,157 @@ text(0.5, 0.5, paste("AUC =", round(auc_boost, 3)), col = "purple", font = 2)
 # Conclusion:
 # The AUC value of 0.993 is very high. This means the model has nearly perfectly
 # separated the signals for 'attrited' vs. 'existing' customers.
+
+#### Model 4: Deep Learning (Neural Network) ####
+
+## Data Pre-processing ##
+# Neural networks require numeric matrices.
+# model.matrix() converts factors to dummy variables automatically.
+# We use the full 'dat' dataset.
+x_data <- model.matrix(Attrition_Flag ~ . - 1, data = dat) # -1 removes intercept
+
+# Scale the predictors 
+x_data_scaled <- scale(x_data)
+
+# Prepare the target variable (0 for Existing, 1 for Attrited)
+y_data <- ifelse(dat$Attrition_Flag == "Yes", 1, 0)
+
+set.seed(2025)
+
+# Split into Train/Test using the SAME index as previous models
+x_train_nn <- x_data_scaled[trainIndex, ]
+y_train_nn <- y_data[trainIndex]
+
+x_test_nn <- x_data_scaled[-trainIndex, ]
+y_test_nn <- y_data[-trainIndex]
+
+## Define the Network Architecture ##
+# We use a sequential model with ReLU activation for hidden layers
+model_nn <- keras_model_sequential() %>%
+  layer_dense(units = 16, activation = "relu", input_shape = ncol(x_train_nn)) %>%
+  layer_dropout(rate = 0.4) %>%             # Dropout to prevent overfitting
+  layer_dense(units = 16, activation = "relu") %>%
+  layer_dropout(rate = 0.3) %>%
+  layer_dense(units = 1, activation = "sigmoid") # Sigmoid for binary output
+
+## Compile the Model ##
+# Using binary_crossentropy for 2-class classification
+model_nn %>% compile(
+  optimizer = "rmsprop",
+  loss = "binary_crossentropy",
+  metrics = c("accuracy")
+)
+
+# Summary of the model structure
+summary(model_nn)
+# The model summary confirms a lightweight architecture with 817 trainable parameters.
+# The inclusion of two dropout layers (0 parameters) shows the structural steps taken 
+# to mitigate overfitting.
+
+## Fit the Model ##
+# We use a validation split of 20% to monitor training progress
+set.seed(2025)
+history <- model_nn %>% fit(
+  x_train_nn, y_train_nn,
+  epochs = 30, 
+  batch_size = 128,
+  validation_split = 0.2
+)
+
+# Plot training history
+plot(history)
+
+## Evaluate on Test Data ##
+# Generate probabilities
+nn_pred_prob <- model_nn %>% predict(x_test_nn)
+
+# Convert probabilities to class labels (Threshold 0.5)
+nn_pred_class <- ifelse(nn_pred_prob > 0.5, "Yes", "No")
+
+# Confusion Matrix
+# Convert to factor for confusionMatrix function
+nn_pred_factor <- factor(nn_pred_class, levels = c("No", "Yes"))
+cm_nn <- confusionMatrix(nn_pred_factor, test_data$Attrition_Flag, positive = "Yes")
+print(cm_nn)
+
+# Analysis:
+# The model correctly classifies about 90% of the customers. This is higher than the 
+# no information rate (83.94%), which confirms the improvement is significant.
+# The sensitivity is fairly low, at a threshold of 0.5, it only captures 51.8% of 
+# attrited customers. This is better than the initial LDA mondel (33%), however it is 
+# significantly lower than the CART (72%) and boosting (88%) models. The high specficity
+# shows that the model is very skewed at predicting non-attrited customers (97.6%).
+#
+# Conclusion:
+# The deep learning model at default (0.5) threshold has high accuracy and specificity,
+# however given the business case of reducing leaving customers, the sensitivity is too low
+# to be useful. Will now work on threshold tuning, aiming to gain a higher sensitivity.
+
+## Threshold Optimisation ##
+
+# Create prediction object (Scores vs. Actuals)
+pred_rocr <- prediction(as.vector(nn_pred_prob), test_data$Attrition_Flag)
+
+# Performance measure, 'fnr' is False Negative Rate (Risk of missing churners)
+perf_fnr <- performance(pred_rocr, "fnr")
+
+# Plot FNR vs Cutoff
+# This shows how threshold changes the false negative rate (lower is better)
+plot(perf_fnr, main = "Risk of Missing Churners (FNR) vs Threshold", 
+     col = "blue", lwd = 2)
+abline(v = 0.2, col = "gray", lty = 2) # visualising the 0.2 threshold chosen
+
+# Performance measure, 'fpr' is False Positive Rate (False Alarms)
+perf_fpr <- performance(pred_rocr, "fpr")
+
+# Plot FPR vs Cutoff
+plot(perf_fpr, main = "False Alarm Rate (FPR) vs Threshold", 
+     col = "orange", lwd = 2)
+abline(v = 0.2, col = "gray", lty = 2) # shows again that 0.2 is a balanced threshold choice
+                                       # without massively increasing the false positive rate.
+                                       # If the threshold was lower it would increase false 
+                                       # positive substantially.
+
+# As shown from the plotted abline(), a good threshold seems to be around 0.2.
+# This minimises the false negative rate while keeping a low false positive rate.
+# We will now see what results we get with this new threshold:
+
+# Convert probabilities to class labels (updated threshold)
+nn_pred_class_NT <- ifelse(nn_pred_prob > 0.2, "Yes", "No")
+
+# Confusion Matrix
+# Convert to factor for confusionMatrix function
+nn_pred_factor_NT <- factor(nn_pred_class_NT, levels = c("No", "Yes"))
+cm_nn_NT <- confusionMatrix(nn_pred_factor_NT, test_data$Attrition_Flag, positive = "Yes")
+print(cm_nn_NT)
+
+# Analysis:
+# Lowering the threshold improved Sensitivity from 51.8% to 74.2%. The model now identifies
+# the majority of attrited customers (362 out of 488), this is much more useful than the old
+# threshold value of 0.5. The specificity slightly lowers from 97.6% to 90.7%, however 
+# this is negligible compared to the increase in sensitivity.
+# With this, the deep learning model is now comparable to the CART model (72% sensitivity),
+# but remains significantly weaker than boosting (88%).
+#
+# Conclusion:
+# While threshold tuning adapted the neural network for sensitivity, this confirms that the 
+# tree based ensemble method, boosting is superior.
+
+# ROC Curve
+roc_nn <- roc(test_data$Attrition_Flag, as.vector(nn_pred_prob), levels = c("No", "Yes"), direction = "<")
+
+plot(roc_nn, col = "red", lwd = 2, main = "ROC Curve: Deep Learning")
+auc_nn <- auc(roc_nn)
+text(0.5, 0.5, paste("AUC =", round(auc_nn, 3)), col = "red", font = 2)
+
+# With an AUC of 0.875, the deep-learning model places 3rd. It outperforms the LDA (0.84), 
+# but trails behind both the single tree (CART, 0.945) and the Boosting model (0.993).
+# The curve rises steeply at the start, indicating the model is excellent at identifying "obvious"
+# leaving customers with high confidence. However, it flattens out earlier than the tree-based models,
+# suggesting it struggles to separate the more subtle attrited customer identifiers.
+#
+# Conclusion: 
+# This result reinforces the common finding that for structured, tabulated data of this size,
+# Boosting is often better performing than neural networks, which typically require
+# larger datasets or unstructured data like images to shine.
+
