@@ -6,6 +6,9 @@ library(gridExtra)   # Arranging multiple plots
 library(corrplot)    # Correlation analysis (Chap 2, Slide 37)
 library(dplyr)       # Functions
 library(tidyr)       # Neat plots
+library(MASS)        # Standard package for LDA in R
+library(caret)       # For data splitting
+library(pROC)        # For ROC curves
 
 dat <- read.csv("BankChurners.csv")
 dat <- dat[, -22:-23] # removing junk columns as instructed on source website
@@ -71,7 +74,7 @@ ggplot(dat, aes(x = Attrition_Flag)) +
 
 # Splitting up into numerical data, to be used later as well
 numeric_data <- dat %>% 
-  select(Attrition_Flag, where(is.numeric)) %>%
+  dplyr::select(Attrition_Flag, where(is.numeric)) %>%  # need to mention 'dplyr' otherwise it gets confused with 'MASS'
   pivot_longer(cols = -Attrition_Flag, names_to = "Variable", values_to = "Value")
                                        # naming generically as 'variables' and 'values' to make one, neat plot
 
@@ -141,7 +144,8 @@ plot_categorical_bars(dat, "Attrition_Flag", ncol = 3)
 
 ## CORRELATION MATRIX ## 
 
-num_data <- dat %>% select(where(is.numeric))
+num_data <- dat %>% 
+  dplyr::select(where(is.numeric))
 cor_matrix <- cor(num_data)
 
 corrplot(cor_matrix, method = "color", type = "upper", 
@@ -170,6 +174,8 @@ corrplot(cor_matrix, method = "color", type = "upper",
 # We will remove the customer age variable, as the months on book variable
 # will be much more telling on how likely the customer is to leave.
 
+## DATA MANIPULATION ## 
+
 # removing Avg_Open_To_Buy
 dat$Avg_Open_To_Buy <- NULL 
 #creating new dataset for no very high correlation variables
@@ -181,3 +187,69 @@ dat_no_corr$Avg_Trans_Amt <- dat$Total_Trans_Amt / dat$Total_Trans_Ct
 # removing the other transaction variables
 dat_no_corr$Total_Trans_Amt <- NULL
 dat_no_corr$Total_Trans_Ct <- NULL
+
+# re-checking the correlation matrix
+
+num_data <- dat_no_corr %>% 
+  dplyr::select(where(is.numeric))
+cor_matrix <- cor(num_data)
+
+corrplot(cor_matrix, method = "color", type = "upper", 
+         order = "hclust", 
+         tl.col = "black", tl.cex = 0.6,
+         addCoef.col = "black", number.cex = 0.5,
+         title = "Feature Correlation Matrix", mar=c(0,0,2,0))
+# there is now no out-of-the-ordinary correlation
+
+str(dat_no_corr)
+
+#### LDA ####
+
+## Split the Data (Using caret) ##
+set.seed(2025) # Ensure reproducibility
+trainIndex <- createDataPartition(dat_no_corr$Attrition_Flag, p = 0.7, list = FALSE)
+train_data <- dat_no_corr[trainIndex, ]
+test_data  <- dat_no_corr[-trainIndex, ]
+
+## Fit the LDA Model ##
+# We use the dot (.) to include all remaining variables in dat_no_corr as predictors
+lda_model <- lda(Attrition_Flag ~ ., data = train_data)
+
+# Output the model details
+# "Prior probabilities of groups" shows the class balance in the training set.
+# "Coefficients of linear discriminants" shows how each variable contributes to the separation.
+print(lda_model)
+
+## Make Predictions on Test Data ##
+# The predict function for LDA returns a list containing:
+# - class: The predicted class (Yes/No)
+# - posterior: The probability of belonging to each class
+lda_predictions <- predict(lda_model, newdata = test_data)
+
+## Evaluation ##
+
+# Confusion Matrix
+# This provides Accuracy, Sensitivity (Recall), and Specificity
+cm_lda <- confusionMatrix(lda_predictions$class, test_data$Attrition_Flag, positive = "Yes")
+print(cm_lda)
+
+# ROC Curve and AUC
+# We use the posterior probability of "Yes" (Attrited) for the ROC curve
+roc_lda <- roc(test_data$Attrition_Flag, lda_predictions$posterior[, "Yes"], levels = c("No", "Yes"), direction = "<")
+
+# Plotting the ROC Curve
+plot(roc_lda, col = "steelblue", lwd = 2, main = "ROC Curve: LDA")
+auc_lda <- auc(roc_lda)
+text(0.5, 0.5, paste("AUC =", round(auc_lda, 3)), col = "steelblue", font = 2)
+
+# The model correctly classifies 87.3% of its customers, however the no information rate is 83.9%,
+# meaning that if we purely guessed 'no' for every customer, we would only lose 3.4% of accuracy
+# compared with the LDA model. The sensitivity is 33%, meaning the model only predicts one in 
+# three attrited customers. The model is excellent at identifying customers that are staying,
+# however this is not important for our goal of predicting who is leaving.
+# 
+# Conclusion:
+# LDA assumes the predictors are normally distributed and share a common covariance matrix.
+# our EDA shows some skewed distributions, and the low sensitivity suggests that a linear
+# boundary is inefficient to capture the customers that are a higher risk of leaving.
+
