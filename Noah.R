@@ -170,6 +170,8 @@ corrplot(cor_matrix, method = "color", type = "upper",
 # We will remove the customer age variable, as the months on book variable
 # will be much more telling on how likely the customer is to leave.
 
+## DATA MANIPULATION ## 
+
 # removing Avg_Open_To_Buy
 dat$Avg_Open_To_Buy <- NULL 
 #creating new dataset for no very high correlation variables
@@ -181,3 +183,17 @@ dat_no_corr$Avg_Trans_Amt <- dat$Total_Trans_Amt / dat$Total_Trans_Ct
 # removing the other transaction variables
 dat_no_corr$Total_Trans_Amt <- NULL
 dat_no_corr$Total_Trans_Ct <- NULL
+
+# re-checking the correlation matrix
+
+num_data <- dat_no_corr %>% select(where(is.numeric))
+cor_matrix <- cor(num_data)
+
+corrplot(cor_matrix, method = "color", type = "upper", 
+         order = "hclust", 
+         tl.col = "black", tl.cex = 0.6,
+         addCoef.col = "black", number.cex = 0.5,
+         title = "Feature Correlation Matrix", mar=c(0,0,2,0))
+# there is now no out of the ordinary correlation
+
+#### LDA ####
