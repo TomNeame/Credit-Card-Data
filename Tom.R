@@ -9,6 +9,7 @@ library(dplyr)
 library(viridis)
 library(readr)
 library(purrr)
+library(class)
 
 #### Quality Checking ####
 
@@ -69,40 +70,137 @@ as.matrix(data.frame(cor_spearman)) %>%
       dataLabels = list(enabled = TRUE)))
 
 
-cols_to_plot <- c("Gender", "Education_Level", "Marital_Status", 
-                  "Income_Category", "Card_Category")
 
-# 3. Create a list of charts using a loop (map)
-chart_list <- map(cols_to_plot, function(col_name) {
-  
-  # Prepare data for this specific column
-  plot_data <- dat %>%
-    group_by(.data[[col_name]], Attrition_Flag) %>%
-    count() %>%
-    ungroup()
-  
-  # Create the chart
-  hchart(plot_data, 
-         type = "column",
-         hcaes(x = !!sym(col_name), y = n, group = Attrition_Flag)) %>%
-    
-    # Dynamic Titles
-    hc_title(text = gsub("_", " ", col_name), align = "center",
-             style = list(fontSize = "14px")) %>% 
-    
-    # Custom Colors: Attrited (Orange), Existing (Blue)
-    hc_colors(c("#FF8C00", "#1f77b4")) %>% 
-    
-    # Simplified Axis formatting for small grid
-    hc_yAxis(title = list(text = "")) %>%
-    hc_xAxis(title = list(text = "")) %>%
-    
-    # Shared Theme
-    hc_add_theme(hc_theme_smpl()) %>%
-    hc_legend(enabled = FALSE) # Hide legend to save space (it's redundant)
-})
+#
+par(mfrow=c(2,2)) # Set up a 2x2 plotting grid
 
-# 4. Display them all together in a grid
-# ncol = 2 means two charts per row
-hw_grid(chart_list, ncol = 2, rowheight = 400)
+hist(dat$Customer_Age, 
+     main="Histogram of Customer Age", 
+     xlab="Age", col="lightblue", border="white")
+
+hist(dat$Total_Trans_Amt, 
+     main="Histogram of Trans Amount", 
+     xlab="Amount", col="lightgreen", border="white")
+
+hist(dat$Total_Trans_Ct, 
+     main="Histogram of Trans Count", 
+     xlab="Count", col="salmon", border="white")
+
+hist(dat$Credit_Limit, 
+     main="Histogram of Credit Limit", 
+     xlab="Credit Limit", col="gray", border="white")
+
+par(mfrow=c(1,2))
+
+boxplot(Total_Trans_Ct ~ Attrition_Flag, data=dat,
+        main="Trans Count by Attrition",
+        ylab="Total Transaction Count",
+        col=c("orange", "lightblue"))
+
+boxplot(Total_Revolving_Bal ~ Attrition_Flag, data=dat,
+        main="Revolving Bal by Attrition",
+        ylab="Total Revolving Balance",
+        col=c("orange", "lightblue"))
+
+
+# removing Avg_Open_To_Buy
+dat$Avg_Open_To_Buy <- NULL 
+#creating new dataset for no very high correlation variables
+dat_no_corr <- dat
+# removing Customer_Age to be used for a no-multicollinearity model
+dat_no_corr$Customer_Age <- NULL
+# combining both transaction variables into one predictor for a no-multicollinearity model
+dat_no_corr$Avg_Trans_Amt <- dat$Total_Trans_Amt / dat$Total_Trans_Ct
+# removing the other transaction variables
+dat_no_corr$Total_Trans_Amt <- NULL
+dat_no_corr$Total_Trans_Ct <- NULL
+
+
+#Splitting the data
+
+set.seed(123) 
+train_index <- sample(1:nrow(dat), 0.7 * nrow(dat)) 
+
+# Set 1: Original Data (For Trees, RF, SVM)
+train_data <- dat[train_index, ]
+test_data <- dat[-train_index, ]
+test_y <- test_data$Attrition_Flag
+
+# Set 2: No-Correlation Data (For GLM, LDA, etc)
+train_data_nc <- dat_no_corr[train_index, ]
+test_data_nc <- dat_no_corr[-train_index, ]
+test_y_nc <- test_data_nc$Attrition_Flag
+
+cat("Training Data Size:", nrow(train_data), "\n")
+cat("Test Data Size:", nrow(test_data), "\n")
+cat("Training Data Size:", nrow(train_data_nc), "\n")
+cat("Test Data Size:", nrow(test_data_nc), "\n")
+
+
+#GLM
+
+glm_fit <- glm(Attrition_Flag ~ ., 
+               data = train_data_nc, 
+               family = binomial)
+
+glm_probs <- predict(glm_fit, test_data_nc, type = "response")
+
+# Determine which class corresponds to probability > 0.5
+# R's glm models the probability of the SECOND factor level.
+# We dynamically get the level names from the data to avoid "Accuracy: 0" due to label mismatches
+# (e.g., if your data has "No/Yes" but we predicted "Attrited/Existing")
+level_neg <- levels(test_y_nc)[1] # The reference class (Prob < 0.5)
+level_pos <- levels(test_y_nc)[2] # The target class (Prob > 0.5)
+
+pred_class <- ifelse(glm_probs > 0.5, level_pos, level_neg)
+
+cat("Confusion Matrix (GLM):\n")
+table(Predicted = pred_class, Actual = test_y_nc)
+cat("Accuracy:", mean(pred_class == as.character(test_y_nc)), "\n")
+
+#The output matrix tells us that the model correctly predicts 183 customers to have left
+#and correctly predicts 2499 customers to be existing. However it falsely predicts 62 customers
+#to have left but are actually existing. Furthermore it predicts 295 customers to be existing
+#whereas they have actually left, this is higher than would be desired.
+#Nevertheless the model has an overall accuracy of 88.3% which is high. 
+#However this could just be largely down to the data consisting or primarily non churners
+#and the model will tend to predict the majority class.
+
+#KNN
+
+# KNN requires NUMERIC input only. 
+# We use model.matrix to turn factors into numbers. 
+# [,-1] removes the Intercept column automatically created by model.matrix
+train_x_knn <- model.matrix(Attrition_Flag ~ ., data = train_data_nc)[,-1]
+test_x_knn <- model.matrix(Attrition_Flag ~ ., data = test_data_nc)[,-1]
+train_y_knn <- train_data_nc$Attrition_Flag
+
+set.seed(1)
+
+# Loop to find the BEST K (from 1 to 20)
+accuracy_results <- numeric(20)
+for(i in 1:20){
+  knn_temp <- knn(train_x_knn, test_x_knn, train_y_knn, k = i)
+  accuracy_results[i] <- mean(knn_temp == test_y_nc)
+}
+
+# Identify best K
+best_k <- which.max(accuracy_results)
+cat("Best K found:", best_k, "with Accuracy:", accuracy_results[best_k], "\n")
+
+# Run Final Model with Best K
+knn_best_pred <- knn(train_x_knn, test_x_knn, train_y_knn, k = best_k)
+
+table(Predicted = knn_best_pred, Actual = test_y_nc)
+cat("Final KNN Accuracy:", mean(knn_best_pred == test_y_nc), "\n")
+
+knn_3 <- knn(train_x_knn, test_x_knn, train_y_knn, k = 3)
+
+table(Predicted = knn_3, Actual = test_y_nc)
+cat("Final KNN Accuracy:", mean(knn_3 == test_y_nc), "\n")
+
+#The model chose k=19 as the best for accuracy (83.8%), this resulted in the model correctly identifying
+#66 customers leaving and missing 412. 
+#If we compare to k=3, the accuracy falls (81.7%), but the model correctly predicted 177 customers
+#leaving and missed 361, which is better. It did however result in more false positives with 196.
 
