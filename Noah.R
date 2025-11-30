@@ -1,4 +1,6 @@
-#### Load Required Packages ####
+#### Install and Load Required Packages ####
+install.packages("tree")
+install.packages("gbm")
 library(janitor)     # Tabulation (tabyl)
 library(ggplot2)     # Data visualisation
 library(patchwork)   # Multiple plots
@@ -9,6 +11,8 @@ library(tidyr)       # Neat plots
 library(MASS)        # Standard package for LDA in R
 library(caret)       # For data splitting
 library(pROC)        # For ROC curves
+library(tree)        # For CART
+library(gbm)         # For Boosting
 
 dat <- read.csv("BankChurners.csv")
 dat <- dat[, -22:-23] # removing junk columns as instructed on source website
@@ -242,6 +246,7 @@ plot(roc_lda, col = "steelblue", lwd = 2, main = "ROC Curve: LDA")
 auc_lda <- auc(roc_lda)
 text(0.5, 0.5, paste("AUC =", round(auc_lda, 3)), col = "steelblue", font = 2)
 
+# Analysis:
 # The model correctly classifies 87.3% of its customers, however the no information rate is 83.9%,
 # meaning that if we purely guessed 'no' for every customer, we would only lose 3.4% of accuracy
 # compared with the LDA model. The sensitivity is 33%, meaning the model only predicts one in 
@@ -253,3 +258,145 @@ text(0.5, 0.5, paste("AUC =", round(auc_lda, 3)), col = "steelblue", font = 2)
 # our EDA shows some skewed distributions, and the low sensitivity suggests that a linear
 # boundary is inefficient to capture the customers that are a higher risk of leaving.
 
+#### Classification Tree (CART) ####
+
+## Data Splitting (Using the full 'dat' dataset, as multicollinearity doesn't matter here) ##
+# We use the same seed to ensure we pick the same customers as the LDA split for fair comparison
+set.seed(2025) 
+trainIndex <- createDataPartition(dat$Attrition_Flag, p = 0.7, list = FALSE)
+train_data_full <- dat[trainIndex, ]
+test_data_full  <- dat[-trainIndex, ]
+
+## Fit the Initial Tree ##
+# The tree will now scan ALL variables in 'dat' to find the best splits
+tree_model <- tree(Attrition_Flag ~ ., data = train_data_full)
+
+# Summary of the tree 
+summary(tree_model) # this means it was a good call to use the dataset with the correlated 
+                    # variables, as they are both used in the tree construction
+
+## Visualise the Unpruned Tree ##
+plot(tree_model)
+text(tree_model, pretty = 0) 
+title("Unpruned Classification Tree")
+
+## Cross-Validation for Pruning ##
+# Using misclassification error as the guide
+set.seed(2025)
+cv_tree <- cv.tree(tree_model, FUN = prune.misclass)
+
+# Visualise CV Results
+plot(cv_tree$size, cv_tree$dev, type = "b", 
+     xlab = "Tree Size", ylab = "CV Misclassification Errors",
+     main = "CV Error vs Tree Size")
+
+## Fit the Pruned Tree ##
+# Select the size that minimizes deviance (error)
+best_size <- cv_tree$size[which.min(cv_tree$dev)]
+best_size
+# 11 has the smallest error, however 9 has a negligibly larger error, so we go with
+# the simpler model.
+
+# Prune the tree
+pruned_model <- prune.misclass(tree_model, best = 9)
+
+# Visualise Pruned Tree
+plot(pruned_model)
+text(pruned_model, pretty = 0)
+title("Pruned Classification Tree")
+
+## Final Evaluation on Test Data ##
+tree_pred_class <- predict(pruned_model, test_data_full, type = "class")
+tree_pred_prob <- predict(pruned_model, test_data_full, type = "vector")
+
+# Confusion Matrix
+cm_tree <- confusionMatrix(tree_pred_class, test_data_full$Attrition_Flag, positive = "Yes")
+print(cm_tree)
+
+# ROC Curve
+roc_tree <- roc(test_data_full$Attrition_Flag, tree_pred_prob[, "Yes"], levels = c("No", "Yes"), direction = "<")
+plot(roc_tree, col = "darkgreen", lwd = 2, main = "ROC Curve: Pruned Tree")
+auc_tree <- auc(roc_tree)
+text(0.5, 0.5, paste("AUC =", round(auc_tree, 3)), col = "darkgreen", font = 2)
+
+# Analysis:
+# The CART model captures 71.7% (sensitivity) of churners, compared to only 33% in LDA.
+# By allowing for non-linear boundaries the tree successfully found the high-risk variables
+# that the LDA couldn't.
+# The AUC of 0.94 is very strong, and shows it understands the attrited and remaining
+# customers well.
+#
+# Conclusion:
+# The very first split of the tree is `Total_Trans_Ct`. This shows that it is the
+# single strongest predictor of attrited customers - customers using their card fewer
+# than 58 times in the last year are immedietly flagged as higher risk of leaving.
+# The fact that both `Total_Trans_Ct` and `Total_Trans_Amt` are included in the tree
+# shows that using the larger dataset with the correlated variables was a good idea,
+# as both are useful in model predictions.
+
+#### Boosting (Gradient Boosted Machines) ####
+
+## Data Prep for GBM ##
+# GBM requires the target to be binary (0/1) rather than a factor (No/Yes)
+# We create a copy of the training data for GBM
+train_data_gbm <- train_data_full
+train_data_gbm$Attrition_Flag <- ifelse(train_data_gbm$Attrition_Flag == "Yes", 1, 0)
+
+test_data_gbm <- test_data_full
+test_data_gbm$Attrition_Flag <- ifelse(test_data_gbm$Attrition_Flag == "Yes", 1, 0)
+
+set.seed(2025)
+
+## Fit the Boosting Model ##
+# distribution = "bernoulli" is used for binary classification
+# n.trees = 5000 is a standard starting point
+# interaction.depth = 4 allows for complex variable interactions
+# shrinkage = 0.01 (learning rate) controls overfitting
+boost_model <- gbm(Attrition_Flag ~ ., 
+                   data = train_data_gbm, 
+                   distribution = "bernoulli", 
+                   n.trees = 5000, 
+                   interaction.depth = 4, 
+                   shrinkage = 0.01,
+                   verbose = FALSE)
+
+## Summary & Variable Importance ##
+# This produces the "Relative Influence" plot
+summary(boost_model)
+# This shows that `Total_Trans_Ct` (29), `Total_Trans_Amt` (21.7), and `Total_Revolving_Bal` (15.6)
+# account for approximately 66% of the models predictive power. This shows that 
+# customers leaving is a behavioral event rather than a demographic one (age, gender, marital status).
+# This means a retention strategy from the bank can't target a specific demographic,
+# but rather be activity based.
+
+## Make Predictions ##
+# n.trees should match the trained model
+# type = "response" gives probabilities
+boost_probs <- predict(boost_model, newdata = test_data_gbm, n.trees = 5000, type = "response")
+
+## Convert Probabilities to Class Labels ##
+# We use a threshold of 0.5
+boost_pred_class <- ifelse(boost_probs > 0.5, "Yes", "No")
+
+## Evaluation ##
+# Convert back to factors for confusionMatrix
+cm_boost <- confusionMatrix(as.factor(boost_pred_class), test_data_full$Attrition_Flag, positive = "Yes")
+print(cm_boost)
+
+# ROC Curve
+roc_boost <- roc(test_data_full$Attrition_Flag, boost_probs, levels = c("No", "Yes"), direction = "<")
+
+plot(roc_boost, col = "purple", lwd = 2, main = "ROC Curve: Boosting (GBM)")
+auc_boost <- auc(roc_boost)
+text(0.5, 0.5, paste("AUC =", round(auc_boost, 3)), col = "purple", font = 2)
+
+# Analysis:
+# The sensitivity has again increased. Starting at 33% (LDA), then 71.7% (CART), and 
+# now 88.1% when using boosting. This shows that the Boosting model successfully identifies
+# 16% more of the customers which are at risk of leaving than the single tree did,
+# successfully predicting 430 attrited customers (true positive), while only missing 
+# 58 (false negative).
+#
+# Conclusion:
+# The AUC value of 0.993 is very high. This means the model has nearly perfectly
+# separated the signals for 'attrited' vs. 'existing' customers.
