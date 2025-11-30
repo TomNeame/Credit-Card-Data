@@ -149,22 +149,35 @@ corrplot(cor_matrix, method = "color", type = "upper",
          tl.col = "black", tl.cex = 0.6,
          addCoef.col = "black", number.cex = 0.5,
          title = "Feature Correlation Matrix", mar=c(0,0,2,0))
-# some of the variables are very, sometimes perfectly, correlated with eachother.
+# Some of the variables are very, sometimes perfectly, correlated with eachother.
 # this is because some variables are very closely linked to another, for example:
 # 'Avg_Open_To_Buy' is equal to the Credit_Limit - current balance of the account holder.
 # so for the individuals who don't use their card much, their credit limit will 
 # essentially be equal to their Avg_Open_To_Buy. This causes multicollinearity, which 
-# breaks some models, so we will remove 'Avg_Open_To_Buy'
+# breaks some models, so we will remove 'Avg_Open_To_Buy'.
 #
-# another potential problem is transaction behaviour:
-# there is a very strong correlation (0.81) between `Total_Transaction_Amt` and `Total_Trans_Ct`,
+# Snother potential problem is transaction behaviour:
+# There is a very strong correlation (0.81) between `Total_Transaction_Amt` and `Total_Trans_Ct`,
 # this makes sense, as people who use their card more often (Ct) usually spend more
 # money in total (Amt). We will keep both variables in, however in models like logistic 
 # regression, having two highly correlated variables makes the model unstable so
-# we will have to take this into account
+# we will have to take this into account. We can combine them to form one predictor
+# in the models where multicollinearity is an issue.
 #
-# another potential problem is that `Customer_Age` and `Months_on_book` are also 
+# Another potential problem is that `Customer_Age` and `Months_on_book` are also 
 # highly correlated (0.79). This makes sense, as older customers generally have held
 # their account for longer. Similarly these two variables provide overlapping information.
-# We will have to check the importance of customer age, as the months on book variable
-# may be much more telling on how likely the customer is to leave
+# We will remove the customer age variable, as the months on book variable
+# will be much more telling on how likely the customer is to leave.
+
+# removing Avg_Open_To_Buy
+dat$Avg_Open_To_Buy <- NULL 
+#creating new dataset for no very high correlation variables
+dat_no_corr <- dat
+# removing Customer_Age to be used for a no-multicollinearity model
+dat_no_corr$Customer_Age <- NULL
+# combining both transaction variables into one predictor for a no-multicollinearity model
+dat_no_corr$Avg_Trans_Amt <- dat$Total_Trans_Amt / dat$Total_Trans_Ct
+# removing the other transaction variables
+dat_no_corr$Total_Trans_Amt <- NULL
+dat_no_corr$Total_Trans_Ct <- NULL
