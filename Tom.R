@@ -17,13 +17,13 @@ library(caret)
 
 #### Quality Checking ####
 
-# visualising variables
+#visualising variables
 
 str(dat) # matches what is expected, may be worth turning 'Attrition_Flag'
 # binary, as this is the outcome variable we are going to predict
 dat$CLIENTNUM <- NULL
 
-## Variables Explained:
+##Variables Explained:
 # CLIENTNUM                : Unique Identifier for customer holding account
 # Attrition_Flag           : If customer is 'Existing' or 'Attrited' (left)
 # Customer_age             : Customers age in years
@@ -70,7 +70,7 @@ as.matrix(data.frame(cor_spearman)) %>%
   hc_colorAxis(stops = color_stops(colors = viridis::inferno(10))) %>%
   hc_plotOptions(
     series = list(
-      boderWidth = 0,
+      borderWidth = 0,
       dataLabels = list(enabled = TRUE)))
 
 
@@ -125,79 +125,55 @@ dat_no_corr$Total_Trans_Ct <- NULL
 set.seed(123) 
 train_index <- sample(1:nrow(dat), 0.7 * nrow(dat)) 
 
-# Set 1: Original Data (For Trees, RF, SVM)
+#Set 1: Original Data (For Trees, RF, SVM)
 train_data <- dat[train_index, ]
 test_data <- dat[-train_index, ]
 test_y <- test_data$Attrition_Flag
 
-# Set 2: No-Correlation Data (For GLM, LDA, etc)
+#Set 2: No-Correlation Data (For GLM, LDA, etc)
 train_data_nc <- dat_no_corr[train_index, ]
 test_data_nc <- dat_no_corr[-train_index, ]
 test_y_nc <- test_data_nc$Attrition_Flag
 
-cat("Training Data Size:", nrow(train_data), "\n")
-cat("Test Data Size:", nrow(test_data), "\n")
-cat("Training Data Size:", nrow(train_data_nc), "\n")
-cat("Test Data Size:", nrow(test_data_nc), "\n")
-
-
 #GLM
 
+#Fitting the model on the non-correlated data
 glm_fit <- glm(Attrition_Flag ~ ., 
                data = train_data_nc, 
                family = binomial)
 
 glm_probs <- predict(glm_fit, test_data_nc, type = "response")
 
-# Determine which class corresponds to probability > 0.5
-# R's glm models the probability of the SECOND factor level.
-level_neg <- levels(test_y_nc)[1] # The reference class (Prob < 0.5)
-level_pos <- levels(test_y_nc)[2] # The target class (Prob > 0.5)
+#Figuring out which label is 0 and which is 1
+level_neg <- levels(test_y_nc)[1] 
+level_pos <- levels(test_y_nc)[2] 
 
-
+#Standard 0.5 cutoff
 pred_class <- ifelse(glm_probs > 0.5, level_pos, level_neg)
 
+#Make sure everything is a factor before feeding to confusionMatrix
 actual_factor <- factor(test_y_nc)
-
-
 predicted_factor <- factor(pred_class, levels = levels(actual_factor))
 
-
-counts <- table(actual_factor)
-pos_label <- names(counts)[which.min(counts)] 
-
-
-#Run Confusion Matrix
+#Check results
 cm_glm <- confusionMatrix(data = predicted_factor, 
                           reference = actual_factor, 
                           positive = pos_label)
-
 print(cm_glm)
 
-#Adjusting Threshold to Increase Sensitivity
-
-# This means if the probability of churning is > 30%, we classify them as Churn.
+#Trying a stricter threshold (0.3) to catch more churners
 threshold <- 0.3
-
-# Apply new threshold
 pred_class_sensitive <- ifelse(glm_probs > threshold, level_pos, level_neg)
-
-# Create factor with correct levels for caret
 predicted_factor_sens <- factor(pred_class_sensitive, levels = levels(actual_factor))
 
-# Run Confusion Matrix to see the improvement in Sensitivity
 cm_sens <- confusionMatrix(data = predicted_factor_sens, 
                            reference = actual_factor, 
                            positive = pos_label)
-
 print(cm_sens)
-# Calculate ROC curve
-roc_glm <- roc(test_y_nc, glm_probs) # (Actual Labels, Predicted Probabilities)
 
-# Print AUC
+#Checking AUC
+roc_glm <- roc(test_y_nc, glm_probs)
 auc(roc_glm)
-
-# Optional: Plot it
 plot(roc_glm, main="ROC Curve - GLM")
 
 
@@ -210,52 +186,34 @@ plot(roc_glm, main="ROC Curve - GLM")
 #and the model will tend to predict the majority class.
 
 #KNN
-
-# KNN requires NUMERIC input only. 
-# We use model.matrix to turn factors into numbers. 
-# [,-1] removes the Intercept column automatically created by model.matrix
+#KNN needs numbers, not factors, so we convert everything
 train_x_knn <- model.matrix(Attrition_Flag ~ ., data = train_data_nc)[,-1]
 test_x_knn <- model.matrix(Attrition_Flag ~ ., data = test_data_nc)[,-1]
 train_y_knn <- train_data_nc$Attrition_Flag
 
 set.seed(1)
 
-# Loop to find the BEST K (from 1 to 20)
+#Simple loop to see which K value works best
 accuracy_results <- numeric(20)
 for(i in 1:20){
   knn_temp <- knn(train_x_knn, test_x_knn, train_y_knn, k = i)
   accuracy_results[i] <- mean(knn_temp == test_y_nc)
 }
 
-# Identify best K
 best_k <- which.max(accuracy_results)
-cat("Best K found:", best_k, "with Accuracy:", accuracy_results[best_k], "\n")
 
-# Run Final Model with Best K
+#Comparing the "best" K vs a generic K=3
 knn_best_pred <- knn(train_x_knn, test_x_knn, train_y_knn, k = best_k)
-
-table(Predicted = knn_best_pred, Actual = test_y_nc)
-cat("Final KNN Accuracy:", mean(knn_best_pred == test_y_nc), "\n")
-
 knn_3 <- knn(train_x_knn, test_x_knn, train_y_knn, k = 3)
 
-table(Predicted = knn_3, Actual = test_y_nc)
-
-
-actual_factor_knn <- factor(test_y_nc)
-predicted_factor_knn <- factor(knn_3, levels = levels(actual_factor_knn))
-
-
-counts <- table(actual_factor_knn)
-pos_label <- names(counts)[which.min(counts)] # The minority class
-
+#Confusion Matrix for K=3
+predicted_factor_knn <- factor(knn_3, levels = levels(actual_factor))
 
 cm_knn <- confusionMatrix(data = predicted_factor_knn, 
-                          reference = actual_factor_knn, 
+                          reference = actual_factor, 
                           positive = pos_label)
 
 print(cm_knn)
-
 
 #The model chose k=19 as the best for accuracy (83.8%), this resulted in the model correctly identifying
 #66 customers leaving and missing 412. 
@@ -267,46 +225,31 @@ print(cm_knn)
 #Random Forest
 
 set.seed(1)
-# mtry: Number of variables randomly sampled as candidates at each split
-# ntree: Number of trees to grow (default 500).
+#Growing 500 trees using the original dataset
 rf_fit <- randomForest(Attrition_Flag ~ ., 
                        data = train_data, 
                        mtry = 4, 
                        importance = TRUE)
-
 print(rf_fit)
 
 rf_pred_class <- predict(rf_fit, test_data, type = "class")
+predicted_factor_rf <- factor(rf_pred_class, levels = levels(actual_factor))
 
-
-# Define Actual data as a factor
-actual_factor <- factor(test_data$Attrition_Flag)
-
-# Convert predictions to Factor with EXACT same levels
-predicted_factor <- factor(rf_pred_class, levels = levels(actual_factor))
-
-# Automatically Identify "Positive" (Churn) Class (Minority)
-counts <- table(actual_factor)
-pos_label <- names(counts)[which.min(counts)] 
-
-# Run Confusion Matrix
-cm_rf <- confusionMatrix(data = predicted_factor, 
+cm_rf <- confusionMatrix(data = predicted_factor_rf, 
                          reference = actual_factor, 
                          positive = pos_label)
-
 print(cm_rf)
 
-importance_matrix <- importance(rf_fit)
-print(head(importance_matrix[order(importance_matrix[,"MeanDecreaseGini"], decreasing=TRUE), ]))
-
+#Checking which variables actually matter
 varImpPlot(rf_fit, main="Random Forest: Variable Importance")
 
+#ROC / AUC for Random Forest
+#Need to be careful to grab the right column for probabilities
 rf_prob_matrix <- predict(rf_fit, test_data, type = "prob")
-minority_class <- names(which.min(table(train_data$Attrition_Flag)))
-churn_col <- intersect(minority_class, colnames(rf_prob_matrix))
-if(length(churn_col) == 0) {
-  churn_col <- colnames(rf_prob_matrix)[1]
-}
+
+#Finding the column that matches our 'pos_label' (Churn)
+churn_col <- intersect(pos_label, colnames(rf_prob_matrix))
+if(length(churn_col) == 0) churn_col <- colnames(rf_prob_matrix)[1]
 
 rf_probs <- rf_prob_matrix[, churn_col]
 roc_rf <- roc(test_data$Attrition_Flag, rf_probs)
@@ -316,61 +259,39 @@ plot(roc_rf, main = paste("ROC Curve - Random Forest (AUC =", round(auc(roc_rf),
 
 #SVM
 
+#Initial run to see how it does
 svm_fit <- svm(Attrition_Flag ~ ., 
                data = train_data, 
                kernel = "radial", 
                cost = 1, 
                scale = TRUE)
 
-print(svm_fit)
-
-
 svm_pred_class <- predict(svm_fit, test_data)
+predicted_factor_svm <- factor(svm_pred_class, levels = levels(actual_factor))
 
-#
-
-# Define Actual data as a factor
-actual_factor <- factor(test_data$Attrition_Flag)
-
-# Convert predictions to Factor with EXACT same levels
-predicted_factor <- factor(svm_pred_class, levels = levels(actual_factor))
-
-# Automatically Identify "Positive" (Churn) Class (Minority)
-counts <- table(actual_factor)
-pos_label <- names(counts)[which.min(counts)] 
-
-# Run Confusion Matrix
-cm_svm <- confusionMatrix(data = predicted_factor, 
+cm_svm <- confusionMatrix(data = predicted_factor_svm, 
                           reference = actual_factor, 
                           positive = pos_label)
-
 print(cm_svm)
 
-# 1. RETRAIN with probability = TRUE
-svm_fit <- svm(Attrition_Flag ~ ., 
-               data = train_data, 
-               kernel = "radial", 
-               cost = 1, 
-               scale = TRUE,
-               probability = TRUE)
+#Retraining with probability turned on so we can do AUC
+svm_fit_prob <- svm(Attrition_Flag ~ ., 
+                    data = train_data, 
+                    kernel = "radial", 
+                    cost = 1, 
+                    scale = TRUE,
+                    probability = TRUE)
 
-# 2. Predict Probabilities 
-svm_pred_prob <- predict(svm_fit, test_data, probability = TRUE)
+#Grabbing the probabilities
+svm_pred_prob <- predict(svm_fit_prob, test_data, probability = TRUE)
 prob_matrix <- attr(svm_pred_prob, "probabilities")
-cat("Actual Column Names:", colnames(prob_matrix), "\n")
 
-possible_names <- c("Attrited Customer", "Attrited.Customer", "Yes", "1")
-match_col <- intersect(possible_names, colnames(prob_matrix))
-
-if(length(match_col) > 0) {
-  target_col <- match_col[1]
-} else {
-  target_col <- colnames(prob_matrix)[1]
-}
+#Finding the right column again
+match_col <- intersect(pos_label, colnames(prob_matrix))
+target_col <- if(length(match_col) > 0) match_col[1] else colnames(prob_matrix)[1]
 
 churn_prob <- prob_matrix[, target_col]
 
-# 4. Calculate and Plot AUC
 roc_svm <- roc(test_data$Attrition_Flag, churn_prob)
 cat("SVM AUC Score:", auc(roc_svm), "\n")
 plot(roc_svm, main = paste("ROC Curve - SVM (AUC =", round(auc(roc_svm), 3), ")"))
