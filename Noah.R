@@ -213,8 +213,6 @@ corrplot(cor_matrix, method = "color", type = "upper",
          title = "Feature Correlation Matrix", mar=c(0,0,2,0))
 # there is now no out-of-the-ordinary correlation
 
-str(dat_no_corr)
-
 #### LDA (Linear Discriminant Analysis) ####
 
 ## Split the Data (Using caret) ##
