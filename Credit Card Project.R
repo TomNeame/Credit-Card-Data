@@ -1,17 +1,17 @@
-library(janitor)     # Tabulation (tabyl)
-library(ggplot2)     # Data visualisation
-library(patchwork)   # Multiple plots
-library(gridExtra)   # Arranging multiple plots
-library(corrplot)    # Correlation analysis (Chap 2, Slide 37)
-library(dplyr)       # Functions
-library(tidyr)       # Neat plots
-library(MASS)        # Standard package for LDA in R
-library(caret)       # For data splitting
-library(pROC)        # For ROC curves
-library(tree)        # For CART
-library(gbm)         # For Boosting
-library(keras)       # For Deep-Learning
-library(ROCR)        # For Threshold visualisation
+library(janitor)      # Tabulation (tabyl)
+library(ggplot2)      # Data visualisation
+library(patchwork)    # Multiple plots
+library(gridExtra)    # Arranging multiple plots
+library(corrplot)     # Correlation analysis (Chap 2, Slide 37)
+library(dplyr)        # Functions
+library(tidyr)        # Neat plots
+library(MASS)         # Standard package for LDA in R
+library(caret)        # For data splitting
+library(pROC)         # For ROC curves
+library(tree)         # For CART
+library(gbm)          # For Boosting
+library(keras)        # For Deep-Learning
+library(ROCR)         # For Threshold visualisation
 library(highcharter)
 library(viridis)
 library(readr)
