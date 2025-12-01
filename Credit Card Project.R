@@ -21,6 +21,8 @@ library(purrr)
 library(class)
 library(randomForest)
 library(e1071)
+library(tidyverse)
+library(kableExtra)
 
 ## Deep-Learning download requirement ***(only run code if TensorFlow is not installed)*** ##
 # reticulate::install_python(version = '3.11') # remove '#' to install requirements
@@ -778,4 +780,85 @@ churn_prob <- prob_matrix[, target_col]
 roc_svm <- roc(test_data$Attrition_Flag, churn_prob)
 cat("SVM AUC Score:", auc(roc_svm), "\n")
 plot(roc_svm, main = paste("ROC Curve - SVM (AUC =", round(auc(roc_svm), 3), ")"))
+
+
+
+
+#Collate all important data metrics into a table
+
+model_data <- tibble(
+  Model = c("Logistic Regression (GLM)", 
+            "Linear Discriminant Analysis (LDA)",
+            "K-Nearest Neighbors (KNN)", 
+            "Support Vector Machine (SVM)",
+            "Classification Tree (CART)",
+            "Random Forest (RF)",
+            "Gradient Boosting (GBM)",
+            "Deep Learning (NN)"),
+  
+  # Input Accuracy as a decimal
+  Accuracy = c(0.806,  # GLM (Threshold 0.2)
+               0.873,  # LDA
+               0.817,  # KNN
+               0.933,  # SVM
+               0.925,  # CART
+               0.961,  # RF
+               0.971,  # GBM
+               0.888), # DL
+  
+  # Input Sensitivity (Recall)
+  Sensitivity = c(0.680, # GLM
+                  0.332, # LDA
+                  0.245, # KNN
+                  0.674, # SVM
+                  0.725, # CART
+                  0.826, # RF
+                  0.881, # GBM
+                  0.735),# DL
+  
+  # Input Specificity
+  Specificity = c(0.829, # GLM
+                  0.976, # LDA
+                  0.924, # KNN
+                  0.981, # SVM
+                  0.965, # CART
+                  0.986, # RF
+                  0.989, # GBM
+                  0.917),# DL
+  
+  # Input AUC
+  AUC = c(0.837, # GLM
+          0.840, # LDA
+          0.667, # KNN
+          0.963, # SVM
+          0.945, # CART
+          0.987, # RF
+          0.993, # GBM
+          0.875) # DL
+)
+
+
+# Create a  table
+model_data %>%
+  # Convert decimals to percentages for readability
+  mutate(
+    Accuracy    = scales::percent(Accuracy, accuracy = 0.1),
+    Sensitivity = scales::percent(Sensitivity, accuracy = 0.1),
+    Specificity = scales::percent(Specificity, accuracy = 0.1),
+    AUC         = format(round(AUC, 3), nsmall = 3) # Keep AUC as decimal (0.123)
+  ) %>%
+  kbl(caption = "Table 1: Comparative Performance of Classification Models", 
+      align = "lcccc") %>%
+  kable_classic(full_width = F, html_font = "Cambria") %>%
+  column_spec(1, bold = T) %>% # Make Model names bold
+  row_spec(0, bold = T, color = "white", background = "#2C3E50") %>% # Header styling
+  
+  #Highlight the best model
+  row_spec(7, bold = T, color = "#27ae60", background = "#eafaf1") %>%
+  
+  # Grouping the rows for better organization
+  pack_rows("Linear Baselines", 1, 2) %>%
+  pack_rows("Non-Linear Classifiers", 3, 4) %>%
+  pack_rows("Tree-Based Ensembles", 5, 7) %>%
+  pack_rows("Neural Networks", 8, 8)
 
