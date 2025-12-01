@@ -215,7 +215,7 @@ corrplot(cor_matrix, method = "color", type = "upper",
 
 str(dat_no_corr)
 
-#### LDA ####
+#### LDA (Linear Discriminant Analysis) ####
 
 ## Split the Data (Using caret) ##
 set.seed(2025) # Ensure reproducibility
@@ -409,7 +409,7 @@ text(0.5, 0.5, paste("AUC =", round(auc_boost, 3)), col = "purple", font = 2)
 # The AUC value of 0.993 is very high. This means the model has nearly perfectly
 # separated the signals for 'attrited' vs. 'existing' customers.
 
-#### Model 4: Deep Learning (Neural Network) ####
+#### Deep Learning (Neural Network) ####
 
 ## Data Pre-processing ##
 # Neural networks require numeric matrices.
