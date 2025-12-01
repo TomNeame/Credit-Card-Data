@@ -1,4 +1,24 @@
-
+library(janitor)     # Tabulation (tabyl)
+library(ggplot2)     # Data visualisation
+library(patchwork)   # Multiple plots
+library(gridExtra)   # Arranging multiple plots
+library(corrplot)    # Correlation analysis (Chap 2, Slide 37)
+library(dplyr)       # Functions
+library(tidyr)       # Neat plots
+library(MASS)        # Standard package for LDA in R
+library(caret)       # For data splitting
+library(pROC)        # For ROC curves
+library(tree)        # For CART
+library(gbm)         # For Boosting
+library(keras)       # For Deep-Learning
+library(ROCR)        # For Threshold visualisation
+library(highcharter)
+library(viridis)
+library(readr)
+library(purrr)
+library(class)
+library(randomForest)
+library(e1071)
 
 dat <- read.csv("BankChurners.csv")
 dat <- dat[, -22:-23] # removing junk columns as instructed on source website
@@ -39,13 +59,4 @@ summary(dat) # useful for the numerical columns
 colSums(is.na(dat)) # no NA values to clean
 
 
-
-GLM T
-LDA N
-KLM T
-CART N
-RF T
-Boosting - GBM N
-Support vector T
-Deep learning N
 
