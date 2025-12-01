@@ -645,6 +645,20 @@ roc_glm <- roc(test_y_nc, glm_probs)
 auc(roc_glm)
 plot(roc_glm, main="ROC Curve - GLM")
 
+#Final attempt at threshold 0.2
+threshold_final <- 0.2
+
+# Get predictions
+pred_final <- ifelse(glm_probs > threshold_final, level_pos, level_neg)
+predicted_factor_final <- factor(pred_final, levels = levels(actual_factor))
+
+# Run Matrix
+cm_final <- confusionMatrix(data = predicted_factor_final, 
+                            reference = actual_factor, 
+                            positive = pos_label)
+
+print(cm_final)
+
 
 #The output matrix tells us that the model correctly predicts 183 customers to have left
 #and correctly predicts 2499 customers to be existing. However it falsely predicts 62 customers
