@@ -1,28 +1,27 @@
 #### Install and Load Required Packages ####
 
-library(janitor)      # Tabulation (tabyl)
-library(ggplot2)      # Data visualisation
-library(patchwork)    # Multiple plots
-library(gridExtra)    # Arranging multiple plots
-library(corrplot)     # Correlation analysis (Chap 2, Slide 37)
-library(dplyr)        # Functions
-library(tidyr)        # Neat plots
-library(MASS)         # Standard package for LDA in R
-library(caret)        # For data splitting
-library(pROC)         # For ROC curves
-library(tree)         # For CART
-library(gbm)          # For Boosting
-library(keras)        # For Deep-Learning
-library(ROCR)         # For Threshold visualisation
-library(highcharter)
-library(viridis)
-library(readr)
-library(purrr)
-library(class)
-library(randomForest)
-library(e1071)
-library(tidyverse)
-library(kableExtra)
+library(janitor)      # Tabulation and cleaning (tabyl)
+library(ggplot2)      # Data visualisation (base plots)
+library(patchwork)    # Combining multiple plots
+library(gridExtra)    # Arranging multiple plots in grids
+library(corrplot)     # Correlation analysis visualisation
+library(dplyr)        # Data manipulation and piping (%>%)
+library(tidyr)        # Data tidying and reshaping
+library(MASS)         # Standard package for LDA
+library(caret)        # Machine Learning workflow (Splitting, Confusion Matrix)
+library(pROC)         # Calculating and Plotting ROC curves/AUC
+library(tree)         # Classification Trees (CART)
+library(gbm)          # Gradient Boosting Machines (GBM)
+library(keras)        # Deep Learning (Neural Networks)
+library(ROCR)         # Threshold visualisation
+library(highcharter)  # Interactive plots (used for Correlation Heatmap)
+library(viridis)      # Colour-blind friendly palettes for plots
+library(purrr)        # Functional programming tools
+library(class)        # K-Nearest Neighbors (KNN)
+library(randomForest) # Random Forest implementation
+library(e1071)        # Support Vector Machines (SVM) & Tuning
+library(tidyverse)    # Meta-package (loads dplyr, ggplot2, readr etc.)
+library(kableExtra)   # Professional table formatting for reports
 
 ## Deep-Learning download requirement ***(only run code if TensorFlow is not installed)*** ##
 # reticulate::install_python(version = '3.11') # remove '#' to install requirements
