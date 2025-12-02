@@ -644,8 +644,9 @@ print(cm_sens)
 
 #Checking AUC
 roc_glm <- roc(test_y_nc, glm_probs)
-auc(roc_glm)
-plot(roc_glm, main="ROC Curve - GLM")
+auc_glm <-auc(roc_glm)
+plot(roc_glm, lwd = 2, main="ROC Curve - GLM")
+text(0.5, 0.5, paste("AUC =", round(auc_glm, 3)), col = "red", font = 2)
 
 #Final attempt at threshold 0.2
 threshold_final <- 0.2
@@ -721,6 +722,18 @@ cm_knn <- confusionMatrix(data = predicted_factor_knn,
 
 print(cm_knn)
 
+knn_prob_fit <- knn(train_x_knn, test_x_knn, train_y_knn, k = 3, prob = TRUE)
+
+prob_winning <- attr(knn_prob_fit, "prob")
+
+prob_churn_knn <- ifelse(knn_prob_fit == "Yes", prob_winning, 1 - prob_winning)
+
+roc_knn <- roc(test_y_nc, prob_churn_knn)
+auc_knn <- auc(roc_knn)
+plot(roc_knn, lwd = 2, main="ROC Curve - KNN")
+text(0.5, 0.5, paste("AUC =", round(auc_knn, 3)), col = "red", font = 2)
+
+
 #The model chose k=19 as the best for accuracy (83.8%), this resulted in the model correctly identifying
 #66 customers leaving and missing 412. 
 #If we compare to k=3, the accuracy falls (81.7%), but the model correctly predicted 177 customers
@@ -760,8 +773,9 @@ if(length(churn_col) == 0) churn_col <- colnames(rf_prob_matrix)[1]
 rf_probs <- rf_prob_matrix[, churn_col]
 roc_rf <- roc(test_data$Attrition_Flag, rf_probs)
 
-print(auc(roc_rf))
-plot(roc_rf, main = paste("ROC Curve - Random Forest (AUC =", round(auc(roc_rf), 3), ")"))
+auc_rf <- auc(roc_rf)
+plot(roc_rf, lwd = 2, main="ROC Curve - RF")
+text(0.5, 0.5, paste("AUC =", round(auc_rf, 3)), col = "red", font = 2)
 
 #### Support Vector Machine ####
 
@@ -850,8 +864,9 @@ target_col <- if(length(match_col) > 0) match_col[1] else colnames(prob_matrix)[
 churn_prob <- prob_matrix[, target_col]
 
 roc_svm <- roc(test_data$Attrition_Flag, churn_prob)
-plot(roc_svm, main = paste("ROC Curve - SVM (AUC =", round(auc(roc_svm), 3), ")"))
-
+auc_svm <- auc(roc_svm)
+plot(roc_svm, lwd = 2, main="ROC Curve - SVM")
+text(0.5, 0.5, paste("AUC =", round(auc_svm, 3)), col = "red", font = 2)
 
 
 
@@ -932,4 +947,20 @@ model_data %>%
   pack_rows("Non-Linear Classifiers", 3, 4) %>%
   pack_rows("Tree-Based Ensembles", 5, 7) %>%
   pack_rows("Neural Networks", 8, 8)
+
+
+#Combined ROC curve plot
+
+plot(roc_rf, col="green", main="ROC Curve Comparison", lwd=2)
+plot(roc_glm, add=TRUE, col="red", lwd=2)
+plot(roc_svm, add=TRUE, col="blue", lwd=2)
+plot(roc_knn, add=TRUE, col="gray", lwd=2)
+plot(roc_boost, add=TRUE, col="orange", lwd=2)
+plot(roc_lda, add=TRUE, col="yellow3", lwd=2)
+plot(roc_nn, add=TRUE, col="magenta3", lwd=2)
+plot(roc_tree, add=TRUE, col="aquamarine", lwd=2)
+
+legend("bottomright", 
+       legend=c("Random Forest (AUC=0.99)", "SVM (AUC=0.96)", "GLM (AUC=0.84)", "KNN (AUC=0.67)"),
+       col=c("darkgreen", "blue", "red", "gray"), lwd=2)
 
