@@ -730,7 +730,7 @@ print(cm_knn)
 
 #### Random Forest ####
 
-set.seed(1)
+set.seed(123)
 #Growing 500 trees using the original dataset
 rf_fit <- randomForest(Attrition_Flag ~ ., 
                        data = train_data, 
@@ -765,7 +765,7 @@ plot(roc_rf, main = paste("ROC Curve - Random Forest (AUC =", round(auc(roc_rf),
 
 #### Support Vector Machine ####
 
-#Initial run to see how it does
+#Fit svm model
 svm_fit <- svm(Attrition_Flag ~ ., 
                data = train_data, 
                kernel = "radial", 
@@ -800,6 +800,56 @@ churn_prob <- prob_matrix[, target_col]
 
 roc_svm <- roc(test_data$Attrition_Flag, churn_prob)
 cat("SVM AUC Score:", auc(roc_svm), "\n")
+plot(roc_svm, main = paste("ROC Curve - SVM (AUC =", round(auc(roc_svm), 3), ")"))
+
+# We need to scientifically find the best parameters
+# To save time, we tune on a random 20% subset of the training data.
+set.seed(123)
+tune_sample_rows <- sample(1:nrow(train_data), 0.2 * nrow(train_data))
+tune_data <- train_data[tune_sample_rows, ]
+
+
+tuned_results <- tune(svm, Attrition_Flag ~ ., 
+                      data = tune_data,
+                      kernel = "radial",
+                      ranges = list(cost = c(0.1, 1, 10),       # Testing loose vs strict margins
+                                    gamma = c(0.01, 0.1, 1)))   # Testing influence of points
+
+# Save the winners
+best_cost <- tuned_results$best.parameters$cost
+best_gamma <- tuned_results$best.parameters$gamma
+
+# Now we train the real model on the full training data using the winners.
+# We include probability = TRUE immediately so we don't have to train it twice.
+svm_fit_final <- svm(Attrition_Flag ~ ., 
+                     data = train_data, 
+                     kernel = "radial", 
+                     cost = best_cost,   # Using the tuned value
+                     gamma = best_gamma, # Using the tuned value
+                     scale = TRUE,
+                     probability = TRUE)
+
+print(svm_fit_final)
+
+svm_pred_class <- predict(svm_fit_final, test_data)
+predicted_factor_svm <- factor(svm_pred_class, levels = levels(actual_factor))
+
+cm_svm <- confusionMatrix(data = predicted_factor_svm, 
+                          reference = actual_factor, 
+                          positive = pos_label)
+print(cm_svm)
+
+# Grabbing the probabilities
+svm_pred_prob <- predict(svm_fit_final, test_data, probability = TRUE)
+prob_matrix <- attr(svm_pred_prob, "probabilities")
+
+# Finding the right column again
+match_col <- intersect(pos_label, colnames(prob_matrix))
+target_col <- if(length(match_col) > 0) match_col[1] else colnames(prob_matrix)[1]
+
+churn_prob <- prob_matrix[, target_col]
+
+roc_svm <- roc(test_data$Attrition_Flag, churn_prob)
 plot(roc_svm, main = paste("ROC Curve - SVM (AUC =", round(auc(roc_svm), 3), ")"))
 
 
