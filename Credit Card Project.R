@@ -661,6 +661,27 @@ cm_final <- confusionMatrix(data = predicted_factor_final,
 
 print(cm_final)
 
+summary(glm_fit)
+
+#Calculate odds ratios and confidence intervals
+#The default coefs are log-odds (hard to read). 
+#We make them exponentials to get odds ratios.
+exp_coefs <- exp(coef(glm_fit))
+ci_lower  <- exp(confint(glm_fit))[,1]
+ci_upper  <- exp(confint(glm_fit))[,2]
+
+#Combine into a readable table
+glm_interpretation <- data.frame(
+  Variable = names(exp_coefs),
+  Odds_Ratio = round(exp_coefs, 4),
+  CI_2.5 = round(ci_lower, 4),
+  CI_97.5 = round(ci_upper, 4),
+  P_Value = round(summary(glm_fit)$coefficients[,4], 4)
+)
+
+#View the table
+print(glm_interpretation)
+
 
 #The output matrix tells us that the model correctly predicts 183 customers to have left
 #and correctly predicts 2499 customers to be existing. However it falsely predicts 62 customers
