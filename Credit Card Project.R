@@ -961,6 +961,10 @@ plot(roc_nn, add=TRUE, col="magenta3", lwd=2)
 plot(roc_tree, add=TRUE, col="aquamarine", lwd=2)
 
 legend("bottomright", 
-       legend=c("Random Forest (AUC=0.99)", "SVM (AUC=0.96)", "GLM (AUC=0.84)", "KNN (AUC=0.67)"),
-       col=c("darkgreen", "blue", "red", "gray"), lwd=2)
+       title = "Model (AUC)",
+       legend=c("RF (0.987)", "SVM (0.963)", "GLM (0.837)", "KNN (0.667)",
+       "GBM (0.993)", "LDA (0.840)", "NN (0.875)", "CART (0.945)"),
+       col=c("green", "blue", "red", "gray", "orange", "yellow3", "magenta3", "aquamarine"), 
+       lwd=2,
+       cex=0.75)
 
